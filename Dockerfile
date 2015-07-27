@@ -20,12 +20,17 @@ RUN cd /var/www/chamilo/www;chown -R www-data:www-data app main/default_course_d
 # Get Composer (putting the download in /root is discutible)
 RUN cd /root
 RUN curl -sS https://getcomposer.org/installer | php
+RUN chmod +x composer.phar
+RUN mv composer.phar /usr/local/bin/composer
 
 # Get Chash
 RUN cd /root
 RUN git clone https://github.com/chamilo/chash
 RUN cd chash
-RUN composer update && composer install
+RUN composer update --no-dev
+RUN php -d phar.readonly=0 createPhar.php
+RUN chmod +x chash.phar
+RUN mv chash.phar /usr/local/bin/chash
 
 # Go to Chamilo folder and install
 # Soon... (this involves having a SQL server in a linked container)
