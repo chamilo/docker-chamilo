@@ -25,7 +25,7 @@ RUN mv composer.phar /usr/local/bin/composer
 
 # Get Chash
 RUN cd /root
-RUN git clone https://github.com/chamilo/chash
+RUN git clone https://github.com/chamilo/chash.git /root/chash
 RUN cd /root/chash
 RUN composer update --no-dev
 RUN php -d phar.readonly=0 createPhar.php
