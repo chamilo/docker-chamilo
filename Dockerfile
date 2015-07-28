@@ -15,7 +15,7 @@ RUN apt-get -y update && apt-get install -y \
   php5-gd \
   php5-intl \
   php5-mysql \
-  wget \
+  wget
 
 RUN apt-get install -y openssh-server
 RUN mkdir -p /var/run/sshd
