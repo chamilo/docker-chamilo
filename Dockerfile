@@ -26,11 +26,9 @@ RUN mv composer.phar /usr/local/bin/composer
 # Get Chash
 RUN cd /root
 RUN git clone https://github.com/chamilo/chash.git /root/chash
-RUN cd /root/chash
-RUN composer update --no-dev
-RUN php -d phar.readonly=0 createPhar.php
-RUN chmod +x chash.phar
-RUN mv chash.phar /usr/local/bin/chash
+RUN cd /root/chash && composer update --no-dev
+RUN cd /root/chash && php -d phar.readonly=0 createPhar.php
+RUN cd /root/chash && chmod +x chash.phar && mv chash.phar /usr/local/bin/chash
 
 # Go to Chamilo folder and install
 # Soon... (this involves having a SQL server in a linked container)
