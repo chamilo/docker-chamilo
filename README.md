@@ -35,11 +35,18 @@ Now start your browser and load http://docker.chamilo.net.
 If you want to use a more complex system with load balancing, you might want to try out the following suite of commands:
 
 ```
+docker run --name varwww -d ywarnier/varw
+```
+
+This will provide a shared /var/www2 partition
+
+```
 docker run --name mariadb -e MYSQL_ROOT_PASSWORD=pass -e MYSQL_USER=chamilo -e MYSQL_PASSWORD=chamilo -e MYSQL_DATABASE=chamilo -d mariadb
-docker run --link=mariadb:db --name chamilo -p 8080:80 -it chamilo/docker-chamilo
+docker run --link=mariadb:db --volumes-from=varwww --name chamilo -p 8080:80 -it chamilo/docker-chamilo
+# Change all configuration to point to /var/www2/chamilo/www and change the Chamilo config file (root_web)
 # configure Chamilo on this first container then take a snapshot
 docker commit -m "Live running Chamilo connected to host 'db' with existing database" {container-hash} docker-chamilo:live
-docker run --link=mariadb:db --name chamilo2 -p 8081:80 -it docker-chamilo:live
+docker run --link=mariadb:db --volumes-from=varwww --name chamilo2 -p 8081:80 -it docker-chamilo:live
 docker run --name lb --link=chamilo:w1 --link=chamilo4:w2 -e CHAMILO_1_PORT_80_TCP_ADDR=172.17.0.10 -e CHAMILO_2_PORT_80_TCP_ADDR=172.17.0.11 -e CHAMILO_HOSTNAME=docker.chamilo.net -e CHAMILO_PATH=/ -p 8082:80 -it jasonwyatt/nginx-loadbalancer
 ```
 
@@ -52,7 +59,7 @@ docker ps
 (to identify the hash of the image of the load balancer (lb))
 
 ```
-docker exec -i -t 87895b732246 bash
+docker exec -i -t {lb-container-hash} bash
 cd /etc/nginx/sites-available/
 vi proxy.conf
 ```
