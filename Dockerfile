@@ -24,8 +24,7 @@ RUN mkdir -p /var/run/sshd
 RUN mkdir -p /var/www/chamilo
 ADD https://github.com/chamilo/chamilo-lms/archive/v1.10.0-alpha.tar.gz /var/www/chamilo/chamilo.tar.gz
 WORKDIR /var/www/chamilo
-RUN mkdir www
-RUN tar zxf chamilo.tar.gz -C www
+RUN tar zxf chamilo.tar.gz;rm chamilo.tar.gz;mv chamilo* www
 WORKDIR www
 RUN chown -R www-data:www-data \
   app \
