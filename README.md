@@ -71,3 +71,5 @@ service nginx reload
 ```
 
 Now you should be good to go.
+
+Note that this will only work as long as you don't upload any file or object that needs to be stored on disk, as the two web servers will not share any disk space in the context presented above.
