@@ -1,11 +1,11 @@
 # docker-chamilo
-Official Docker image for Chamilo LMS
+Official Docker image for Chamilo LMS 1.9
 
 This image is not ready yet. Please come back soon or watch the project for updates.
 
 ## Launching
 
-This image is currently based on Chamilo LMS 1.10 and requires a separate database container to run.
+This image is currently based on Chamilo LMS 1.9.10.2 and requires a separate database container to run.
 We suggest using the "mariadb" container, like so:
 
 ```
