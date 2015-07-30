@@ -27,11 +27,14 @@ WORKDIR /var/www/chamilo
 RUN tar zxf chamilo.tar.gz;rm chamilo.tar.gz;mv chamilo* www
 WORKDIR www
 RUN chown -R www-data:www-data \
-  app \
+  archive \
+  courses \
+  home \
   main/default_course_document/images \
+  main/css \
   main/lang \
-  vendor \
-  web
+  main/upload/users \
+  searchdb
 
 # Get Composer (putting the download in /root is discutible)
 WORKDIR /root
