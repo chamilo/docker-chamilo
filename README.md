@@ -44,6 +44,7 @@ This will provide a shared /var/www2 partition
 docker run --name mariadb -e MYSQL_ROOT_PASSWORD=pass -e MYSQL_USER=chamilo -e MYSQL_PASSWORD=chamilo -e MYSQL_DATABASE=chamilo -d mariadb
 docker run --link=mariadb:db --volumes-from=varwww --name chamilo -p 8080:80 -it chamilo/docker-chamilo
 # Change all configuration to point to /var/www2/chamilo/www and change the Chamilo config file (root_web)
+# Also, inside app/config/configuration.php, change "session_stored_in_db" to true
 # configure Chamilo on this first container then take a snapshot
 docker commit -m "Live running Chamilo connected to host 'db' with existing database" {container-hash} docker-chamilo:live
 docker run --link=mariadb:db --volumes-from=varwww --name chamilo2 -p 8081:80 -it docker-chamilo:live
