@@ -57,4 +57,4 @@ RUN echo "127.0.0.1 docker.chamilo.net" >> /etc/hosts
 # Soon... (this involves having a SQL server in a linked container)
 
 EXPOSE 22 80
-CMD ["/bin/bash"]
+CMD ["/etc/init.d/apache2 restart", "/bin/bash"]
