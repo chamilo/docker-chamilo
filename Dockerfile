@@ -51,7 +51,7 @@ ADD chamilo.conf /etc/apache2/sites-available/chamilo.conf
 RUN a2ensite chamilo
 RUN a2enmod rewrite
 RUN /etc/init.d/apache2 restart
-RUN cat "127.0.0.1 docker.chamilo.net" >> /etc/hosts
+RUN echo "127.0.0.1 docker.chamilo.net" >> /etc/hosts
 
 # Go to Chamilo folder and install
 # Soon... (this involves having a SQL server in a linked container)
