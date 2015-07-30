@@ -49,5 +49,10 @@ RUN chmod +x chash.phar && mv chash.phar /usr/local/bin/chash
 # Go to Chamilo folder and install
 # Soon... (this involves having a SQL server in a linked container)
 
+# Configure and start Apache
+ADD chamilo.conf /etc/apache2/sites-available/chamilo.conf
+RUN a2ensite chamilo
+RUN service apache2 start
+
 EXPOSE 22 80
 CMD ["/bin/bash"]
