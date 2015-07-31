@@ -61,4 +61,4 @@ RUN echo "127.0.0.1 docker.chamilo.net" >> /etc/hosts
 
 # Remove 11211 if you don't want the possibility to share memcache between containers
 EXPOSE 22 80 11211
-CMD ["/etc/init.d/apache2 restart", "/bin/bash"]
+CMD ["/bin/bash"]
