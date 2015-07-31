@@ -56,5 +56,6 @@ RUN echo "127.0.0.1 docker.chamilo.net" >> /etc/hosts
 # Go to Chamilo folder and install
 # Soon... (this involves having a SQL server in a linked container)
 
+WORKDIR /var/www/chamilo/www
 EXPOSE 22 80
 CMD ["/bin/bash"]
