@@ -53,7 +53,7 @@ RUN chmod +x chash.phar && mv chash.phar /usr/local/bin/chash
 ADD chamilo.conf /etc/apache2/sites-available/chamilo.conf
 RUN a2ensite chamilo
 RUN a2enmod rewrite
-RUN /etc/init.d/apache2 restart
+RUN service apache2 restart
 RUN echo "127.0.0.1 docker.chamilo.net" >> /etc/hosts
 
 # Go to Chamilo folder and install
