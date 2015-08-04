@@ -34,6 +34,7 @@ RUN chown -R www-data:www-data \
   main/css \
   main/lang \
   main/upload/users \
+  main/inc/conf \
   searchdb
 
 # Get Composer (putting the download in /root is discutible)
