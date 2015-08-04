@@ -17,7 +17,7 @@ This will get you back on the command line of the Docker host. You can see the c
 Then start the chamilo/docker-chamilo container:
 
 ```
-docker run --link=mariadb:db --name chamilo -p 8080:80 -it chamilo/docker-chamilo
+docker run --link=mariadb:db --name chamilo2 -p 8080:80 -it chamilo/docker-chamilo:1.9.10 bash
 ```
 
 At this point, the docker-chamilo image doesn't provide an installed version of Chamilo LMS, but this should be ready soon.
