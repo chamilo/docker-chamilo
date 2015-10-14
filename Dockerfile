@@ -1,4 +1,4 @@
-FROM ubuntu:14.04
+FROM ubuntu:15.04
 MAINTAINER Yannick Warnier <ywarnier@chamilo.org>
 
 # Keep upstart from complaining
@@ -14,7 +14,8 @@ RUN apt-get -y update && apt-get install -y \
   php5-curl \
   php5-gd \
   php5-intl \
-  php5-mysql \
+  php5-mysqlnd \
+  php5-json \
   wget
 
 RUN apt-get install -y openssh-server
@@ -22,7 +23,7 @@ RUN mkdir -p /var/run/sshd
 
 # Get Chamilo
 RUN mkdir -p /var/www/chamilo
-ADD https://github.com/chamilo/chamilo-lms/archive/v1.10.0-alpha.tar.gz /var/www/chamilo/chamilo.tar.gz
+ADD https://github.com/chamilo/chamilo-lms/archive/v1.10.0-rc.6.tar.gz /var/www/chamilo/chamilo.tar.gz
 WORKDIR /var/www/chamilo
 RUN tar zxf chamilo.tar.gz;rm chamilo.tar.gz;mv chamilo* www
 WORKDIR www
