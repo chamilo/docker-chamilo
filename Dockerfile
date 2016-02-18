@@ -26,14 +26,19 @@ RUN apt-get install debconf-utils
 RUN echo "mysql-server mysql-server/root_password password chamilo" | debconf-set-selections
 RUN echo "mysql-server mysql-server/root_password_again password chamilo" | debconf-set-selections
 RUN apt-get -y install mysql-server mysql-client
+RUN service mysql restart
 
 # Get Chamilo
 RUN mkdir -p /var/www/chamilo
 WORKDIR /var/www/chamilo
 RUN git clone --depth=1 --single-branch -b 1.10.x https://github.com/chamilo/chamilo-lms.git www
 WORKDIR www
-RUN rm -rf vendor
-RUN git clone --depth=1 --single-branch -b 1.10.x https://github.com/chamilo/chamilo-vendors vendor
+RUN rm -rf vendor web composer.lock
+RUN git clone --depth=1 --single-branch -b 1.10.x https://github.com/ywarnier/chamilo-vendors import
+RUN mv import/vendor vendor
+RUN mv import/web web
+RUN mv import/composer.lock composer.lock
+RUN rm -rf import
 
 # Get Composer (putting the download in /root is discutible)
 WORKDIR /root
@@ -64,7 +69,6 @@ RUN /etc/init.d/apache2 restart
 # Go to Chamilo folder and install
 # Soon... (this involves having a SQL server in a linked container)
 WORKDIR /var/www/chamilo/www
-RUN composer install
 RUN chown -R www-data:www-data \
   app \
   main/default_course_document/images \
@@ -81,8 +85,8 @@ RUN chash chash:chamilo_install \
   --firstname="John" \
   --lastname="Doe" \
   --language="english" \
-  --driver="mysqlnd" \
-  --host="localhost" \
+  --driver="pdo_mysql" \
+  --host="127.0.0.1" \
   --port="3306" \
   --dbname="chamilo" \
   --dbuser="root" \
