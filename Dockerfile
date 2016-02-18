@@ -23,21 +23,17 @@ RUN mkdir -p /var/run/sshd
 
 # Install MySQL
 RUN apt-get install debconf-utils
-RUN debconf-set-selections <<< 'mariadb-server mysql-server/root_password password chamilo'
-RUN debconf-set-selections <<< 'mariadb-server mysql-server/root_password_again password chamilo'
+RUN echo "mysql-server mysql-server/root_password password chamilo" | debconf-set-selections
+RUN echo "mysql-server mysql-server/root_password_again password chamilo" | debconf-set-selections
 RUN apt-get -y install mysql-server mysql-client
 
 # Get Chamilo
 RUN mkdir -p /var/www/chamilo
 WORKDIR /var/www/chamilo
-RUN git clone --single-branch -b 1.10.x https://github.com/chamilo/chamilo-lms.git www
+RUN git clone --depth=1 --single-branch -b 1.10.x https://github.com/chamilo/chamilo-lms.git www
 WORKDIR www
-RUN chown -R www-data:www-data \
-  app \
-  main/default_course_document/images \
-  main/lang \
-  vendor \
-  web
+RUN rm -rf vendor
+RUN git clone --depth=1 --single-branch -b 1.10.x https://github.com/chamilo/chamilo-vendors vendor
 
 # Get Composer (putting the download in /root is discutible)
 WORKDIR /root
@@ -48,7 +44,8 @@ RUN mv composer.phar /usr/local/bin/composer
 # Get Chash
 RUN git clone https://github.com/chamilo/chash.git chash
 WORKDIR chash
-RUN composer update --no-dev
+RUN composer global require "fxp/composer-asset-plugin:1.0.3"
+RUN composer update
 RUN php -d phar.readonly=0 createPhar.php
 RUN chmod +x chash.phar && mv chash.phar /usr/local/bin/chash
 
@@ -67,6 +64,13 @@ RUN /etc/init.d/apache2 restart
 # Go to Chamilo folder and install
 # Soon... (this involves having a SQL server in a linked container)
 WORKDIR /var/www/chamilo/www
+RUN composer install
+RUN chown -R www-data:www-data \
+  app \
+  main/default_course_document/images \
+  main/lang \
+  vendor \
+  web
 RUN chash chash:chamilo_install \
   --no-interaction \
   --sitename="Chamilo" \
