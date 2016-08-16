@@ -41,8 +41,6 @@ WORKDIR /root
 RUN curl -sS https://getcomposer.org/installer | php
 RUN chmod +x composer.phar
 RUN mv composer.phar /usr/local/bin/composer
-WORKDIR /var/www/chamilo/www
-RUN composer update -n
 
 # Get Chash
 RUN git clone https://github.com/chamilo/chash.git chash
@@ -66,9 +64,10 @@ RUN a2enmod rewrite
 RUN echo "127.0.0.1 docker.chamilo.net" >> /etc/hosts
 RUN /etc/init.d/apache2 restart
 
-# Go to Chamilo folder and install
+# Go to Chamilo folder and update composer resources
 # Soon... (this involves having a SQL server in a linked container)
 WORKDIR /var/www/chamilo/www
+RUN composer update -n
 RUN chown -R www-data:www-data \
   app \
   main/default_course_document/images \
