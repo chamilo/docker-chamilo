@@ -1,4 +1,4 @@
-FROM ubuntu:15.10
+FROM ubuntu:16.04
 MAINTAINER Yannick Warnier <ywarnier@chamilo.org>
 
 # Keep upstart from complaining
@@ -9,13 +9,15 @@ RUN ln -sf /bin/true /sbin/initctl
 RUN apt-get -y update && apt-get install -y \
   curl \
   git \
-  libapache2-mod-php5 \
-  php5-cli \
-  php5-curl \
-  php5-gd \
-  php5-intl \
-  php5-mysqlnd \
-  php5-json \
+  libapache2-mod-php7.0 \
+  php7.0-cli \
+  php7.0-curl \
+  php7.0-gd \
+  php7.0-intl \
+  php7.0-mbstring \
+  php7.0-mcrypt \
+  php7.0-mysql \
+  php7.0-zip \
   wget
 
 RUN apt-get install -y openssh-server
@@ -30,25 +32,21 @@ RUN apt-get -y install mysql-server mysql-client
 # Get Chamilo
 RUN mkdir -p /var/www/chamilo
 WORKDIR /var/www/chamilo
-RUN git clone --depth=1 --single-branch -b 1.10.x https://github.com/chamilo/chamilo-lms.git www
+RUN git clone --depth=1 --single-branch -b 1.11.x https://github.com/chamilo/chamilo-lms.git www
 WORKDIR www
-RUN rm -rf vendor web composer.lock
-RUN git clone --depth=1 --single-branch -b 1.10.x https://github.com/ywarnier/chamilo-vendors import
-RUN mv import/vendor vendor
-RUN mv import/web web
-RUN mv import/composer.lock composer.lock
-RUN rm -rf import
+RUN rm -rf vendor/* web/* composer.lock
 
-# Get Composer (putting the download in /root is discutible)
+# Get Composer and update Chamilo (putting the download in /root is discutible)
 WORKDIR /root
 RUN curl -sS https://getcomposer.org/installer | php
 RUN chmod +x composer.phar
 RUN mv composer.phar /usr/local/bin/composer
+WORKDIR /var/www/chamilo/www
+RUN composer update -n
 
 # Get Chash
 RUN git clone https://github.com/chamilo/chash.git chash
 WORKDIR chash
-RUN composer global require "fxp/composer-asset-plugin:1.0.3"
 RUN rm -rf vendor
 RUN git clone https://github.com/ywarnier/chash-vendors.git vendors
 RUN mv vendors/vendor vendor
@@ -77,31 +75,6 @@ RUN chown -R www-data:www-data \
   main/lang \
   vendor \
   web
-#RUN chash chash:chamilo_install \
-#  --no-interaction \
-#  --sitename="Chamilo" \
-#  --site_url="http://docker.chamilo.net/" \
-#  --institution="Chamilo" \
-#  --institution_url="https://chamilo.org" \
-#  --encrypt_method="sha1" \
-#  --firstname="John" \
-#  --lastname="Doe" \
-#  --language="english" \
-#  --driver="pdo_mysql" \
-#  --host="127.0.0.1" \
-#  --port="3306" \
-#  --dbname="chamilo" \
-#  --dbuser="root" \
-#  --dbpassword="chamilo" \
-#  --permissions_for_new_directories="0777" \
-#  --permissions_for_new_files="0666" \
-#  --linux-user="www-data" \
-#  --linux-group="www-data" \
-#  --username="admin" \
-#  --password="admin" \
-#  --email="admin@example.com" \
-#  --phone="555-5555" \
-#  1.10.x
-#
+
 EXPOSE 22 80
 CMD ["/bin/bash"]
