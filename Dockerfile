@@ -23,7 +23,7 @@ RUN mkdir -p /var/run/sshd
 
 # Get Chamilo
 RUN mkdir -p /var/www/chamilo
-ADD https://github.com/chamilo/chamilo-lms/archive/v1.10.0.tar.gz /var/www/chamilo/chamilo.tar.gz
+ADD https://github.com/chamilo/chamilo-lms/archive/v1.10.2.tar.gz /var/www/chamilo/chamilo.tar.gz
 WORKDIR /var/www/chamilo
 RUN tar zxf chamilo.tar.gz;rm chamilo.tar.gz;mv chamilo* www
 WORKDIR www
