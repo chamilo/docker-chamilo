@@ -1,4 +1,7 @@
 # docker-chamilo
+
+[![](https://images.microbadger.com/badges/image/chamilo/docker-chamilo.svg)](https://microbadger.com/images/chamilo/docker-chamilo "Get your own image badge on microbadger.com")
+
 Official Docker image for Chamilo LMS
 
 This image is not ready yet. Please come back soon or watch the project for updates.
