@@ -46,7 +46,7 @@ Create a data directory on a suitable volume on your host system, e.g.
 Start your mariadb container like this:
 
 ```
-docker run --name mariadb -e MYSQL_ROOT_PASSWORD=pass -e MYSQL_USER=chamilo -e MYSQL_PASSWORD=chamilo -e MYSQL_DATABASE=chamilo -v /my/chamilo/db:/var/lib/mysql -d mariadb:10-bionic
+docker run --name chamilo-db -e MYSQL_ROOT_PASSWORD=pass -e MYSQL_USER=chamilo -e MYSQL_PASSWORD=chamilo -e MYSQL_DATABASE=chamilo -v /my/chamilo/db:/var/lib/mysql -d mariadb:10-bionic
 ```
 
 ```
