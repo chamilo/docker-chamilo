@@ -40,7 +40,7 @@ In the initial setup use the following values:
 Create a data directory on a suitable volume on your host system, e.g.
 
     mkdir /my/chamilo/db
-    mkdir /my/chamilo/config
+    mkdir /my/chamilo/web
 
 
 Start your mariadb container like this:
@@ -50,7 +50,7 @@ docker run --name chamilo-db -e MYSQL_ROOT_PASSWORD=pass -e MYSQL_USER=chamilo -
 ```
 
 ```
-docker run --link=chamilo-db:db --name chamilo -p 8080:80 -d -v /my/chamilo/config:/var/www/html/app/config/  chamilo/docker-chamilo
+docker run --link=chamilo-db:db --name chamilo -p 8080:80 -d -v /my/chamilo/web:/var/www/html/  chamilo/docker-chamilo
 ```
 
 **Using your own timezone**
