@@ -1,61 +1,30 @@
-FROM ubuntu:14.04
-MAINTAINER Yannick Warnier <ywarnier@chamilo.org>
+from ubuntu:bionic
 
-# Keep upstart from complaining
-RUN dpkg-divert --local --rename --add /sbin/initctl
-RUN ln -sf /bin/true /sbin/initctl
+ENV DEBIAN_FRONTEND=noninteractive
 
-# Update Ubuntu and install basic PHP stuff
-RUN apt-get -y update && apt-get install -y \
-  curl \
-  git \
-  libapache2-mod-php5 \
-  php5-cli \
-  php5-curl \
-  php5-gd \
-  php5-intl \
-  php5-mysql \
-  wget
+# Install Apache and PHP
 
-RUN apt-get install -y openssh-server
-RUN mkdir -p /var/run/sshd
+RUN apt-get update && \
+ apt-get install -y apache2 php libapache2-mod-php php-gd php-intl php-curl php-json php-mysql php-zip php-xml php-mbstring php-dom composer git && \
+ apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Get Chamilo
-RUN mkdir -p /var/www/chamilo
-ADD https://github.com/chamilo/chamilo-lms/archive/v1.10.0-alpha.tar.gz /var/www/chamilo/chamilo.tar.gz
-WORKDIR /var/www/chamilo
-RUN tar zxf chamilo.tar.gz;rm chamilo.tar.gz;mv chamilo* www
-WORKDIR www
-RUN chown -R www-data:www-data \
-  app \
-  main/default_course_document/images \
-  main/lang \
-  vendor \
-  web
+# Install Chamilo LMS
+RUN mkdir /var/www/chamilo-template && \
+  git clone -b 1.11.x --single-branch https://github.com/chamilo/chamilo-lms.git  /var/www/chamilo-template && \
+  cd /var/www/chamilo-template && composer update && \
+  chown -R www-data:www-data app main/default_course_document/images main/lang web && \
+  rm -rf /var/www/chamilo-template/.git
 
-# Get Composer (putting the download in /root is discutible)
-WORKDIR /root
-RUN curl -sS https://getcomposer.org/installer | php
-RUN chmod +x composer.phar
-RUN mv composer.phar /usr/local/bin/composer
+# Prepare Apache and PHP configuration
+RUN rm /var/www/html/*
+COPY htaccessForChamilo.conf /etc/apache2/conf-available/
+COPY php-overrides.ini /etc/php/7.2/apache2/conf.d/20-php.ini
+RUN a2enconf htaccessForChamilo && \
+  a2enmod rewrite && \
+  sed -ri -e 's!^(\s*ErrorLog)\s+\S+!\1 /proc/self/fd/2!g' /etc/apache2/sites-enabled/000-default.conf
 
-# Get Chash
-RUN git clone https://github.com/chamilo/chash.git chash
-WORKDIR chash
-RUN composer update --no-dev
-RUN php -d phar.readonly=0 createPhar.php
-RUN chmod +x chash.phar && mv chash.phar /usr/local/bin/chash
+EXPOSE 80
 
-# Configure and start Apache
-ADD chamilo.conf /etc/apache2/sites-available/chamilo.conf
-RUN a2ensite chamilo
-RUN a2enmod rewrite
-RUN /etc/init.d/apache2 restart
-RUN echo "127.0.0.1 docker.chamilo.net" >> /etc/hosts
+COPY init-and-run.sh .
 
-# Go to Chamilo folder and install
-# Soon... (this involves having a SQL server in a linked container)
-
-WORKDIR /var/www/chamilo/www
-EXPOSE 22 80
-CMD ["/bin/bash"]
+CMD ["./init-and-run.sh"]
