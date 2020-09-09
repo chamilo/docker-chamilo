@@ -42,7 +42,9 @@ This will get you back on the command line of the Docker host. You can see the c
 docker ps
 ```
 
-Then start the chamilo/docker-chamilo container:
+Then start the chamilo/docker-chamilo container:  
+
+Please note that you'll hace to customize settings before building the image, work still have to be done to hace ENV variables override all resources when docker run gets exetuted.
 
 ```bash
 docker run -d \
