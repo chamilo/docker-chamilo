@@ -12,7 +12,7 @@ Some values can be passed as --build-arg and later as environment variables.
 
 ```bash
 docker build -t chamilo/docker-chamilo:1.11.12 \
-  --build-arg MYSQL_ROOT_PASSWORD="****" \
+  --build-arg MYSQL_ROOT_PASSWORD="pass" \
   --build-arg FQDN="chamilo.example.net" \
   --build-arg TZ="Europe/Brussels" \
   --build-arg APACHE_LOG_DIR="/var/log/apache2" \
