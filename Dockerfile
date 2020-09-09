@@ -44,6 +44,7 @@ WORKDIR /var/www/chamilo-lms
 RUN mkdir -p vendor && mkdir -p web
 RUN chown -R www-data:www-data app main/default_course_document/images main/lang vendor web
 RUN chmod 0775 -R app main/default_course_document/images main/lang web && chmod 0555 -R vendor
+RUN composer update -n
 
 # Configure and start Apache
 RUN echo "ServerName ${FQDN}" >> /etc/apache2/apache2.conf
