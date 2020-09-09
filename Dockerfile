@@ -1,50 +1,48 @@
-FROM ubuntu:16.04
-MAINTAINER Yannick Warnier <ywarnier@chamilo.org>
+FROM ubuntu:20.04
+LABEL author="Yannick Warnier <ywarnier@chamilo.org>"
+LABEL contributor="Diego Bendlin <diego.bendlin@gmail.com>"
+
+ARG MYSQL_ROOT_PASSWORD
+ARG FQDN
+ARG TZ 
+ARG APACHE_LOG_DIR 
+# Environment section
+ENV FQDN ${FQDN}
+ENV TZ ${TZ}
+ENV APACHE_LOG_DIR ${APACHE_LOG_DIR}
+
+# Configure Timezone
+RUN ln -snf /usr/share/zoneinfo/${TZ} /etc/localtime && echo ${TZ} > /etc/timezone
 
 # Keep upstart from complaining
 RUN dpkg-divert --local --rename --add /sbin/initctl
 RUN ln -sf /bin/true /sbin/initctl
 
-# Update Ubuntu and install basic PHP stuff
-RUN apt-get -y update && apt-get install -y \
-  curl \
-  git \
-  libapache2-mod-php7.0 \
-  php7.0-cli \
-  php7.0-curl \
-  php7.0-gd \
-  php7.0-intl \
-  php7.0-mbstring \
-  php7.0-mcrypt \
-  php7.0-mysql \
-  php7.0-zip \
-  wget
+# Update Ubuntu and install all required packages
+RUN apt-get -y update && apt-get install -y apt-utils
+RUN apt-get install -y apache2 mysql-client php \
+  libapache2-mod-php php-mysqlnd php-mysql \
+  php-xml php-json php-iconv php-gd php-intl php-mbstring \
+  php-ctype php-ldap php-curl php-xsl php-zip \
+  git curl nano unzip debconf-utils gettext-base iputils-ping
 
-RUN apt-get install -y openssh-server
-RUN mkdir -p /var/run/sshd
+# Configure MySQL
+RUN echo "mysql-server mysql-server/root_password password ${MYSQL_ROOT_PASSWORD}" | debconf-set-selections
+RUN echo "mysql-server mysql-server/root_password_again password ${MYSQL_ROOT_PASSWORD}" | debconf-set-selections
 
-# Install MySQL
-RUN apt-get install debconf-utils
-RUN echo "mysql-server mysql-server/root_password password chamilo" | debconf-set-selections
-RUN echo "mysql-server mysql-server/root_password_again password chamilo" | debconf-set-selections
-RUN apt-get -y install mysql-server mysql-client
+# Add datetime setting to php.ini
+RUN echo "date.timezone = ${TZ}" >> /etc/php/7.4/apache2/php.ini
+RUN echo "date.timezone = ${TZ}" >> /etc/php/7.4/cli/php.ini
 
-# Get Chamilo
-RUN mkdir -p /var/www/chamilo
-WORKDIR /var/www/chamilo
-RUN git clone --depth=1 --single-branch -b 1.11.x https://github.com/chamilo/chamilo-lms.git www
-WORKDIR www
-RUN rm -rf vendor/* web/* composer.lock
-
-# Get Composer and update Chamilo (putting the download in /root is discutible)
-WORKDIR /root
+# Get Composer and update Chamilo
+WORKDIR /tmp
 RUN curl -sS https://getcomposer.org/installer | php
 RUN chmod +x composer.phar
 RUN mv composer.phar /usr/local/bin/composer
 
 # Get Chash
 RUN git clone https://github.com/chamilo/chash.git chash
-WORKDIR chash
+WORKDIR /tmp/chash
 RUN rm -rf vendor
 RUN git clone https://github.com/ywarnier/chash-vendors.git vendors
 RUN mv vendors/vendor vendor
@@ -52,28 +50,28 @@ RUN rm -rf vendors
 RUN php -d phar.readonly=0 createPhar.php
 RUN chmod +x chash.phar && mv chash.phar /usr/local/bin/chash
 
-# Add datetime setting to php.ini
-RUN echo "date.timezone = Europe/Brussels" >> /etc/php5/apache2/php.ini
-RUN echo "date.timezone = Europe/Brussels" >> /etc/php5/cli/php.ini
-
-# Configure and start Apache
-ADD chamilo.conf /etc/apache2/sites-available/chamilo.conf
-RUN a2ensite chamilo
-RUN a2enmod rewrite
-#RUN a2enmod rewrite headers expires ssl
-RUN echo "127.0.0.1 docker.chamilo.net" >> /etc/hosts
-RUN /etc/init.d/apache2 restart
+# Get Chamilo from Github
+WORKDIR /var/www
+RUN git clone --depth=1 --single-branch -b 1.11.x https://github.com/chamilo/chamilo-lms.git
 
 # Go to Chamilo folder and update composer resources
-# Soon... (this involves having a SQL server in a linked container)
-WORKDIR /var/www/chamilo/www
+WORKDIR /var/www/chamilo-lms
 RUN composer update -n
-RUN chown -R www-data:www-data \
-  app \
-  main/default_course_document/images \
-  main/lang \
-  vendor \
-  web
+# Change permissions
+RUN chown -R www-data:www-data app main/default_course_document/images main/lang vendor web
+RUN chmod 0775 -R app main/default_course_document/images main/lang web && chmod 0555 -R vendor
 
-EXPOSE 22 80
-CMD ["/bin/bash"]
+# Configure and start Apache
+RUN echo "ServerName ${FQDN}" >> /etc/apache2/apache2.conf
+RUN echo "127.0.0.1 ${FQDN}" >> /etc/hosts
+## Enable Rewrite module
+RUN a2enmod rewrite
+#RUN a2enmod rewrite headers expires ssl
+
+## Enable Chamilo Site
+ADD chamilo.conf /etc/apache2/sites-available/chamilo.conf.ori
+RUN envsubst < /etc/apache2/sites-available/chamilo.conf.ori > /etc/apache2/sites-available/chamilo.conf
+RUN a2ensite chamilo
+
+EXPOSE 80/tcp
+ENTRYPOINT [ "/usr/sbin/apache2ctl", "-D", "FOREGROUND" ]
