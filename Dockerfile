@@ -23,8 +23,8 @@ RUN apt-get -y update && apt-get install -y apt-utils
 RUN apt-get install -y apache2 mysql-client php \
   libapache2-mod-php php-mysqlnd php-mysql \
   php-xml php-json php-iconv php-gd php-intl php-mbstring \
-  php-ctype php-ldap php-curl php-xsl php-zip \
-  git composer curl nano unzip debconf-utils gettext-base iputils-ping
+  php-ctype php-ldap php-curl php-xsl php-zip php-fpm \
+  git composer curl nano unzip debconf-utils gettext-base iputils-ping net-tools 
 
 # Configure MySQL
 RUN echo "mysql-server mysql-server/root_password password ${MYSQL_ROOT_PASSWORD}" | debconf-set-selections
@@ -55,7 +55,6 @@ RUN a2enmod rewrite
 
 ## Enable Chamilo Site
 ADD chamilo.conf /etc/apache2/sites-available/chamilo.conf.ori
-RUN envsubst < /etc/apache2/sites-available/chamilo.conf.ori > /etc/apache2/sites-available/chamilo.conf
 RUN a2ensite chamilo
 
 EXPOSE 80/tcp
