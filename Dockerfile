@@ -54,7 +54,7 @@ RUN a2enmod rewrite
 #RUN a2enmod rewrite headers expires ssl
 
 ## Enable Chamilo Site
-ADD chamilo.conf /etc/apache2/sites-available/chamilo.conf.ori
+ADD chamilo.conf /etc/apache2/sites-available/chamilo.conf
 RUN a2ensite chamilo
 
 EXPOSE 80/tcp
