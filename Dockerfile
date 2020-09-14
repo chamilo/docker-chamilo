@@ -36,7 +36,7 @@ RUN echo "date.timezone = ${TZ}" >> /etc/php/7.4/cli/php.ini
 
 # Get Chamilo from Github
 WORKDIR /var/www
-RUN git clone --depth=1 --single-branch -b 1.11.x https://github.com/chamilo/chamilo-lms.git
+RUN git clone --depth=1 -b feature/ubuntu-20.04 https://github.com/dbendlin/chamilo-lms.git
 
 # Go to Chamilo folder and update composer resources
 WORKDIR /var/www/chamilo-lms
