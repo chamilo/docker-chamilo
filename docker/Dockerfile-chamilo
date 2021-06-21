@@ -1,0 +1,92 @@
+FROM ubuntu:20.04
+
+#updated and modified by: Hans Haufe
+MAINTAINER Yannick Warnier <ywarnier@chamilo.org>
+
+# set timezone
+ENV TZ=Europe/Kiev
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+
+# Keep upstart from complaining
+RUN dpkg-divert --local --rename --add /sbin/initctl
+RUN ln -sf /bin/true /sbin/initctl
+
+# Update Ubuntu and install basic PHP stuff & mysql
+RUN apt-get -y update && apt-get install -y \
+  curl \
+  git \
+  libapache2-mod-php7.4 \
+  php7.4-cli \
+  php7.4-curl \
+  php7.4-gd \
+  php7.4-xml \
+  php7.4-mbstring \
+  php7.4-intl \
+  php7.4-ldap \
+  php7.4-zip \
+  php7.4-mysql \
+  mariadb-server \
+  openssh-server \
+  supervisor \
+  wget
+
+# Setup Supervisor to auto start services
+RUN mkdir -p /var/lock/apache2 /var/run/apache2 /var/run/sshd /var/log/supervisor
+RUN mkdir -p /var/run/sshd
+ADD supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+
+# Generate host keys for sshd
+RUN ssh-keygen -A
+
+# Setup mysql and import initialized Chamilo Database.
+ADD chamilo-1.11.14.sql /root/chamilo-1.11.14.sql
+WORKDIR /root
+RUN /etc/init.d/mysql start && \  
+  sleep 5 && \
+  mysql -u root -e "CREATE DATABASE chamilo;CREATE USER chamilo@localhost identified by '1qaz2wsx';GRANT ALL ON chamilo.* to chamilo@localhost WITH GRANT OPTION;" && \
+  mysql -u root chamilo < chamilo-1.11.14.sql
+  
+
+# Get Chamilo
+RUN mkdir -p /var/www/chamilo
+ADD https://github.com/chamilo/chamilo-lms/releases/download/v1.11.14/chamilo-1.11.14.tar.gz /var/www/chamilo/chamilo.tar.gz
+WORKDIR /var/www/chamilo
+RUN tar zxf chamilo.tar.gz;rm chamilo.tar.gz;mv chamilo* www
+WORKDIR www
+RUN chown -R www-data:www-data \
+  app \
+  main/default_course_document/images \
+  main/lang \
+  vendor \
+  web \
+  /var/log/apache2 \
+  /var/run/apache2
+ADD configuration.php /var/www/chamilo/www/app/config/configuration.php
+
+# Get Composer (putting the download in /root is discutible)
+WORKDIR /root
+RUN curl -sS https://getcomposer.org/installer | php
+RUN chmod +x composer.phar
+RUN mv composer.phar /usr/local/bin/composer
+
+# Get Chash
+RUN git clone https://github.com/chamilo/chash.git chash
+WORKDIR chash
+RUN composer update --no-dev
+RUN php -d phar.readonly=0 createPhar.php
+RUN chmod +x chash.phar && mv chash.phar /usr/local/bin/chash
+
+# Configure Apache
+RUN rm /etc/apache2/sites-available/000-default.conf
+ADD chamilo.conf /etc/apache2/sites-available/chamilo.conf
+RUN a2ensite chamilo
+RUN a2enmod rewrite
+
+# Go to Chamilo folder and install
+# Soon... (this involves having a SQL server in a linked container)
+WORKDIR /var/www/chamilo/www
+EXPOSE 22 80
+# CMD ["/bin/bash"]
+
+
+CMD ["/usr/bin/supervisord"]
