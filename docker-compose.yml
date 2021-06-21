@@ -1,0 +1,12 @@
+version: "3.8"
+services:
+  chamilo:
+    environment:
+      - DEBIAN_FRONTEND=noninteractive
+    ports:
+      - 8080:80 # Ports that are exposed, you can connect to port 80 to port 80 of the container.
+    image: chamilo-lms/chamilo-1.11.14
+    container_name: 'the_new_container_name'
+    build:
+        context: ./docker 
+        dockerfile: Dockerfile-chamilo        
