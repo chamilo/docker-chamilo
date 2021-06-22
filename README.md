@@ -3,7 +3,7 @@
 
 This Dockerfile is to build a Chamilo 1.11.14 default instalation docker image.
 This a Pre Beta/Alpha build and is not and never wil be intended for Production enviorments, for that a dedicated server would be recommended.
-**This is not a ready Docker Image for that look here: **
+**This is not a ready Docker Image for that look here: ** https://hub.docker.com/r/spacecabbie/chamilo-lms
 
 ## Building
 
