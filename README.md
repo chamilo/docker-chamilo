@@ -1,39 +1,25 @@
 # docker-chamilo
+"Official" Docker build for Chamilo LMS
 
-[![](https://images.microbadger.com/badges/image/chamilo/docker-chamilo.svg)](https://microbadger.com/images/chamilo/docker-chamilo "Get your own image badge on microbadger.com")
+This Dockerfile is to build a Chamilo 1.11.14 default instalation docker image.
+This a Pre Beta/Alpha build and is not and never wil be intended for Production enviorments, for that a dedicated server would be recommended.
+**This is not a ready Docker Image for that look here: **
 
-Official Docker image for Chamilo LMS
+## Building
 
-This image is not ready yet. Please come back soon or watch the project for updates.
-
-## Launching
-
-This image is currently based on Chamilo LMS 1.10 and requires a separate database container to run.
-We suggest using the "mariadb" container, like so:
-
+This Build is currently based on Chamilo LMS 1.11.14  
+To build the image run:
 ```
-docker run --name mariadb -e MYSQL_ROOT_PASSWORD=pass -e MYSQL_USER=chamilo -e MYSQL_PASSWORD=chamilo -e MYSQL_DATABASE=chamilo -d mariadb
+docker-compose build in the main directory.
 ```
-
-This will get you back on the command line of the Docker host. You can see the container running with ```docker ps```.
-
-Then start the chamilo/docker-chamilo container:
-
+Then you can run it like:
 ```
-docker run --link=mariadb:db --name chamilo -p 8080:80 -it chamilo/docker-chamilo
+docker run -p 80:80 -p 22:22 spacecabbie/chamilo-lms:1.11.14-Alpha
 ```
 
-At this point, the docker-chamilo image doesn't provide an installed version of Chamilo LMS, but this should be ready soon.
+Now start your browser and load http://localhost
 
-The configuration files assume the host will be "docker.chamilo.net", so you will have to define it in your host's /etc/hosts file, depending on the IP of the container.
-
-```
-72.17.0.10 docker.chamilo.net
-```
-
-Now start your browser and load http://docker.chamilo.net.
-
-## Using with a load-balancer
+## Using with a load-balancer The information below is outdated and needs updating this wil be done soon.
 
 If you want to use a more complex system with load balancing, you might want to try out the following suite of commands:
 
