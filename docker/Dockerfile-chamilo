@@ -4,7 +4,7 @@ FROM ubuntu:20.04
 MAINTAINER Yannick Warnier <ywarnier@chamilo.org>
 
 # set timezone
-ENV TZ=Europe/Kiev
+ENV TZ=Europe/Amsterdam
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
 # Keep upstart from complaining
@@ -28,6 +28,7 @@ RUN apt-get -y update && apt-get install -y \
   mariadb-server \
   openssh-server \
   supervisor \
+  augeas-tools \
   wget
 
 # Setup Supervisor to auto start services
@@ -36,7 +37,8 @@ RUN mkdir -p /var/run/sshd
 ADD supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
 # Generate host keys for sshd
-RUN ssh-keygen -A
+# RUN ssh-keygen -q -t rsa -N '' -f /id_rsa && \
+#  echo "    IdentityFile ~/.ssh/id_rsa" >> /etc/ssh/ssh_config
 
 # Setup mysql and import initialized Chamilo Database.
 ADD chamilo-1.11.14.sql /root/chamilo-1.11.14.sql
@@ -45,7 +47,6 @@ RUN /etc/init.d/mysql start && \
   sleep 5 && \
   mysql -u root -e "CREATE DATABASE chamilo;CREATE USER chamilo@localhost identified by '1qaz2wsx';GRANT ALL ON chamilo.* to chamilo@localhost WITH GRANT OPTION;" && \
   mysql -u root chamilo < chamilo-1.11.14.sql
-  
 
 # Get Chamilo
 RUN mkdir -p /var/www/chamilo
@@ -81,12 +82,10 @@ RUN rm /etc/apache2/sites-available/000-default.conf
 ADD chamilo.conf /etc/apache2/sites-available/chamilo.conf
 RUN a2ensite chamilo
 RUN a2enmod rewrite
-
-# Go to Chamilo folder and install
-# Soon... (this involves having a SQL server in a linked container)
-WORKDIR /var/www/chamilo/www
 EXPOSE 22 80
-# CMD ["/bin/bash"]
 
+RUN mkdir -p ~root/.ssh /etc/authorized_keys && chmod 700 ~root/.ssh/ && \
+    augtool 'set /files/etc/ssh/sshd_config/AuthorizedKeysFile ".ssh/authorized_keys /etc/authorized_keys/%u"' && \
+    cp -a /etc/ssh /etc/ssh.cache
 
-CMD ["/usr/bin/supervisord"]
+CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/supervisord.conf"]
