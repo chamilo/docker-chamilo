@@ -1,0 +1,2 @@
+# Ignore items for docker build
+tmp/
