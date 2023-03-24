@@ -1,61 +1,35 @@
-FROM ubuntu:14.04
-MAINTAINER Yannick Warnier <ywarnier@chamilo.org>
+FROM php:7.4-apache
 
-# Keep upstart from complaining
-RUN dpkg-divert --local --rename --add /sbin/initctl
-RUN ln -sf /bin/true /sbin/initctl
+LABEL maintainer="Chamilo <info@chamilo.org>"
 
-# Update Ubuntu and install basic PHP stuff
-RUN apt-get -y update && apt-get install -y \
-  curl \
-  git \
-  libapache2-mod-php5 \
-  php5-cli \
-  php5-curl \
-  php5-gd \
-  php5-intl \
-  php5-mysql \
-  wget
+# Install required system packages
+RUN apt-get update && apt-get install -y \
+    git \
+    libfreetype6-dev \
+    libjpeg62-turbo-dev \
+    libpng-dev \
+    libzip-dev \
+    unzip \
+    && docker-php-ext-configure gd --with-freetype --with-jpeg \
+    && docker-php-ext-install -j$(nproc) gd \
+    && docker-php-ext-install -j$(nproc) iconv \
+    && docker-php-ext-install -j$(nproc) intl \
+    && docker-php-ext-install -j$(nproc) pdo_mysql \
+    && docker-php-ext-install -j$(nproc) zip
 
-RUN apt-get install -y openssh-server
-RUN mkdir -p /var/run/sshd
-
-# Get Chamilo
-RUN mkdir -p /var/www/chamilo
-ADD https://github.com/chamilo/chamilo-lms/archive/v1.10.0-alpha.tar.gz /var/www/chamilo/chamilo.tar.gz
-WORKDIR /var/www/chamilo
-RUN tar zxf chamilo.tar.gz;rm chamilo.tar.gz;mv chamilo* www
-WORKDIR www
-RUN chown -R www-data:www-data \
-  app \
-  main/default_course_document/images \
-  main/lang \
-  vendor \
-  web
-
-# Get Composer (putting the download in /root is discutible)
-WORKDIR /root
-RUN curl -sS https://getcomposer.org/installer | php
-RUN chmod +x composer.phar
-RUN mv composer.phar /usr/local/bin/composer
-
-# Get Chash
-RUN git clone https://github.com/chamilo/chash.git chash
-WORKDIR chash
-RUN composer update --no-dev
-RUN php -d phar.readonly=0 createPhar.php
-RUN chmod +x chash.phar && mv chash.phar /usr/local/bin/chash
-
-# Configure and start Apache
-ADD chamilo.conf /etc/apache2/sites-available/chamilo.conf
-RUN a2ensite chamilo
+# Enable Apache mod_rewrite
 RUN a2enmod rewrite
-RUN /etc/init.d/apache2 restart
-RUN echo "127.0.0.1 docker.chamilo.net" >> /etc/hosts
 
-# Go to Chamilo folder and install
-# Soon... (this involves having a SQL server in a linked container)
+# Set the Chamilo version
+ENV CHAMILO_VERSION 1.11.18
 
-WORKDIR /var/www/chamilo/www
-EXPOSE 22 80
-CMD ["/bin/bash"]
+# Download Chamilo
+RUN curl -SL "https://github.com/chamilo/chamilo-lms/releases/download/v${CHAMILO_VERSION}/chamilo-${CHAMILO_VERSION}.tar.gz" -o chamilo.tar.gz \
+    && tar -xzf chamilo.tar.gz -C /var/www/html --strip-components=1 \
+    && rm chamilo.tar.gz \
+    && chown -R www-data:www-data /var/www/html \
+    && chmod -R go=u,go-w /var/www/html
+
+# Expose port 80 for Apache
+EXPOSE 80
+
