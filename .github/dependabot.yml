@@ -1,0 +1,31 @@
+# Weekly Dependabot — GitHub Actions only.
+#
+# This repo is docker-only. Its only native-Detectable dependency manifest is
+# the GitHub Actions in .github/workflows/build.yml (actions/checkout,
+# docker/setup-buildx-action, docker/build-push-action). Native Dependabot
+# opens a weekly PR here when any of those actions publish a new version.
+#
+# It deliberately does NOT cover the rest of this image's inputs, because they
+# are not native Dependabot ecosystems:
+#   * CHAMILO_LMS_REF — a raw git ref of chamilo/chamilo-lms, fetched by the
+#     Dockerfile at build time. Tracked by .github/workflows/dep-drift.yml
+#     (weekly), which opens the drift Issue and the LMS bump PR.
+#   * docker-compose.yml images (mariadb:11, redis:7) — floating minors; they
+#     already pull the newest 11.x / 7.x on each `docker compose pull`, so
+#     there is no pin to manage.
+#   * the PHP base (FROM php:${PHP_VER}-fpm) — deliberately pinned to 8.3 (the
+#     point of the takeover branch), a human decision; it is also
+#     arg-parameterised, which native Dependabot can't match.
+#
+# Division of labour (so the two don't double-bump the same dependency):
+#   native Dependabot    -> GitHub Actions (this file)
+#   dep-drift workflow   -> the LMS pin  + the weekly drift Issue
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "github-actions"

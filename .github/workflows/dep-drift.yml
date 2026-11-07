@@ -1,0 +1,205 @@
+# dep-drift — weekly dependency drift for what native Dependabot can't manage.
+#
+# Native Dependabot (.github/dependabot.yml) only understands real manifests,
+# and this docker-only repo has exactly one: the GitHub Actions in build.yml.
+# The other things that can go stale — and that a dependabot run can't touch
+# because they aren't a recognised ecosystem — are handled HERE, weekly:
+#
+#   * CHAMILO_LMS_REF — a raw git ref of chamilo/chamilo-lms fetched by the
+#     Dockerfile at build time. We track it against the latest stable release
+#     tag of chamilo/chamilo-lms (AGENTS.md: "Prefer a release tag for
+#     reproducible public builds" — NOT master, so the image stays reproducible).
+#   * docker-compose.yml images — NOT managed here on purpose. mariadb:11 and
+#     redis:7 are floating minors; `docker compose pull` already fetches the
+#     newest 11.x / 7.x each time, so there is no pin to bump and nothing to
+#     detect. (If you ever pin them to patch versions, add them below.)
+#   * the PHP base (FROM php:${PHP_VER}-fpm) — deliberately pinned to 8.3 (the
+#     point of the takeover branch). A major PHP jump is a human decision, so
+#     it is left out of the automation.
+#
+# WHAT IT OPENS (automatically, weekly):
+#   * a PR  — the one-line Dockerfile bump to the newest stable LMS tag, and
+#   * an Issue — the weekly drift report.
+#
+#   The PR is FAIL-CLOSED: before it opens, this workflow builds the image at
+#   the candidate ref (the exact build from build.yml, via docker/build-
+#   push-action). A PR is opened only if that build succeeds. If it fails, NO
+#   PR is opened and the drift Issue records the failure instead — so a large
+#   LMS jump (the pin can be many commits behind the latest tag) never lands as
+#   a red PR you have to close. It is OPENED, not merged: a maintainer reviews
+#   the one-line diff and merges. The PR's own push re-runs build.yml as a
+#   second gate.
+#
+#   The Issue is opened only when there is drift (a PR was opened, or the build
+#   gate failed). When the pin already equals the latest stable tag it is a
+#   clean no-op — no weekly "all up to date" noise.
+#
+# HOW IT TALKS TO GITHUB: the `gh` CLI — preinstalled on the GitHub-hosted
+# ubuntu-latest runner and authenticated by GITHUB_TOKEN itself (no installer
+# action, no `gh auth login`). Each GitHub operation is a readable one-liner:
+# `gh api` for the release/compare lookups, `gh pr` to dedup/open the PR, and
+# the `JasonEtco/create-an-issue` action to file the weekly drift-report Issue
+# (and the build-FAILED Issue) from a committed template in
+# `.github/ISSUE_TEMPLATE/`. Git is the repo's own (the one-line Dockerfile
+# edit + push). No hand-rolled curl/jq, no embedded JS, no `gh issue`.
+#
+# The Issue path uses a GitHub Action, not `gh`, because `gh issue create`
+# inside a workflow is the documented anti-pattern for exactly this: a
+# template file (`.github/ISSUE_TEMPLATE/dep-drift-report.md`) plus the
+# create-an-issue action gives a version-controlled, diffable Issue body,
+# and the action dedups by exact title on open Issues (update_existing: false
+# = "skip if one is already open"), which is the same no-duplicate behaviour
+# the old `gh issue list | grep -Fxq` check provided.
+#
+# Cost: GitHub-hosted runners are free/unmetered for public repos, so this
+# is not metered against the 2,000-min/500 MB quota (private only). The real
+# cost is one cold image build per drift week; up-to-date weeks skip the build.
+name: dep-drift
+
+on:
+  # Mondays 06:00 UTC.
+  schedule:
+    - cron: "0 6 * * 1"
+  # Manual run (same as the schedule: detect latest stable tag, build-gate, open).
+  workflow_dispatch:
+
+# GITHUB_TOKEN is read-only by default; grant exactly what this needs. The
+# built-in token can push a fresh branch and open a PR on THIS repo (no PAT
+# required) because we target the repo the workflow runs in — which is why it
+# works in the fork today and would work in upstream if copied there later.
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+env:
+  LMS_REPO: chamilo/chamilo-lms
+  # PR branch prefix; keep stable for dedup.
+  PR_BRANCH_PREFIX: dep-drift/chamilo-lms-
+
+jobs:
+  drift:
+    name: Detect, build-gate, open
+    runs-on: ubuntu-latest
+    # A cold LMS build can exceed the default 1h; match build.yml's headroom.
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      # Same buildx builder as build.yml so this gate is byte-identical to the
+      # real build. Pinned to the same published minor.
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4.4.1
+
+      # Detect drift: latest stable tag vs the current pin (read out of the
+      # Dockerfile). `gh` is preinstalled on the runner; GITHUB_TOKEN authenticates
+      # it (no `gh auth login`). `releases/latest` is the latest STABLE release
+      # (404s if there is none — let it fail the run, don't guess).
+      - name: Detect drift (latest stable tag vs current pin)
+        id: detect
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          LATEST="$(gh api "repos/${LMS_REPO}/releases/latest" --jq .tag_name)"
+          CUR="$(sed -n '/^ARG[[:space:]]*CHAMILO_LMS_REF=/{s/^ARG[[:space:]]*CHAMILO_LMS_REF=//p}' Dockerfile)"
+          DRIFT=false
+          [ "$CUR" != "$LATEST" ] && DRIFT=true
+          { echo "LATEST=$LATEST"; echo "CUR=$CUR"; echo "DRIFT=$DRIFT"; } >> "$GITHUB_ENV"
+          echo "current pin: $CUR"
+          echo "latest stable: $LATEST"
+
+      # Up-to-date: nothing to say. No build, no PR, no Issue.
+      - name: Up to date — no-op
+        if: env.DRIFT == 'false'
+        run: echo "CHAMILO_LMS_REF already equals the latest stable tag; nothing to open."
+
+      # Build at the candidate ref — the gate. Runs only when there is drift.
+      # Identical build to build.yml (same action, same pinning), but with the
+      # candidate ref as a build-arg. A failure here means NO PR is opened.
+      #
+      # NOTE: the gate conditions use `steps.gate.result` — the standard
+      # Actions step-status context (success/failure/cancelled/skipped). When
+      # DRIFT=false the gate is skipped, so result=='skipped' and neither
+      # downstream step runs.
+      - name: Build-gate at candidate ref
+        id: gate
+        if: env.DRIFT == 'true'
+        uses: docker/build-push-action@v7.4.0
+        with:
+          context: .
+          load: true
+          build-args: |
+            CHAMILO_LMS_REF=${{ env.LATEST }}
+          tags: dep-drift-gate:${{ env.LATEST }}
+
+      # Build failed: NO PR. File a build-FAILED drift Issue from the template.
+      # The create-an-issue action dedups by exact title on open Issues
+      # (update_existing: false -> skip if one is already open), so a re-run
+      # for the same ref is a no-op — same as the old `gh issue list | grep`.
+      - name: File drift Issue (build FAILED — no PR opened)
+        if: env.DRIFT == 'true' && steps.gate.result == 'failure'
+        uses: JasonEtco/create-an-issue@v2.9.2
+        with:
+          filename: .github/ISSUE_TEMPLATE/dep-drift-failed.md
+          update_existing: false
+        env:
+          # {{ env.LATEST }} in the template resolves to this (GITHUB_ENV).
+          LATEST: ${{ env.LATEST }}
+
+      # Build succeeded: open the one-line bump PR (dedup by branch), then file
+      # the weekly drift report Issue (dedup by from->to pair).
+      - name: Open bump PR + file drift Issue
+        if: env.DRIFT == 'true' && steps.gate.result == 'success'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CUR: ${{ env.CUR }}
+          LATEST: ${{ env.LATEST }}
+          PR_BRANCH_PREFIX: ${{ env.PR_BRANCH_PREFIX }}
+        run: |
+          set -euo pipefail
+          BRANCH="${PR_BRANCH_PREFIX}${LATEST}"
+          TITLE_PR="build: bump CHAMILO_LMS_REF to ${LATEST}"
+          # Commit identity = the workflow bot (deterministic; no local git config).
+          BOT_NAME="github-actions[bot]"
+          BOT_EMAIL="41898282+github-actions[bot]@users.noreply.github.com"
+
+          # --- The bump PR (dedup by branch: skip if one for this ref is already open).
+          if [ -z "$(gh pr list --state open --head "$BRANCH" --json headRefName --jq '.[].headRefName' 2>/dev/null || true)" ]; then
+            git checkout -b "$BRANCH"
+            # One-line edit: rewrite the ARG line (wherever it is), value -> newest stable.
+            sed -i '/^ARG[[:space:]]*CHAMILO_LMS_REF=/{s/^ARG[[:space:]]*CHAMILO_LMS_REF=.*/ARG CHAMILO_LMS_REF='"${LATEST}"'/}' Dockerfile
+            git add Dockerfile
+            git -c user.name="$BOT_NAME" -c user.email="$BOT_EMAIL" \
+              commit -m "$TITLE_PR" \
+              -m "Bumps the pinned ${LMS_REPO} ref from ${CUR} to the latest stable release ${LATEST} (one-line, fail-closed: this run built the image at ${LATEST} before opening)."
+            # Push with GITHUB_TOKEN (contents:write -> fresh-branch push to THIS repo is allowed).
+            git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/$(gh repo view --json nameWithOwner -q .nameWithOwner).git"
+            git push -u origin "$BRANCH"
+            # `--head` skips any fork/push prompt (the branch is already pushed).
+            gh pr create --head "$BRANCH" --title "$TITLE_PR" --body "Bumps the pinned CHAMILO_LMS_REF from ${CUR} to the latest stable release ${LATEST}. Opened automatically by the weekly dep-drift workflow, which built the image at ${LATEST} before opening it (fail-closed). The push re-runs build.yml as a second gate. Review the one-line diff; no auto-merge."
+          else
+            echo "An open PR for ${BRANCH} already exists; not opening a duplicate."
+          fi
+
+          # How many commits the latest tag is ahead of the pin (best-effort),
+          # reported in the drift-report Issue template ({{ env.AHEAD }}).
+          AHEAD="$(gh api "repos/${LMS_REPO}/compare/${CUR}...${LATEST}" --jq .ahead_by 2>/dev/null || echo '?')"
+          echo "AHEAD=${AHEAD}" >> "$GITHUB_ENV"
+
+      # Build succeeded: file the weekly drift report Issue (dedup by the
+      # from->to pair). The create-an-issue action dedups by exact title on
+      # open Issues (update_existing: false -> skip), so a re-run for the
+      # same pair is a no-op — same as the old `gh issue list | grep`.
+      - name: File drift report Issue
+        if: env.DRIFT == 'true' && steps.gate.result == 'success'
+        uses: JasonEtco/create-an-issue@v2.9.2
+        with:
+          filename: .github/ISSUE_TEMPLATE/dep-drift-report.md
+          update_existing: false
+        env:
+          # {{ env.CUR/LATEST/AHEAD }} in the template resolve to these.
+          CUR: ${{ env.CUR }}
+          LATEST: ${{ env.LATEST }}
+          AHEAD: ${{ env.AHEAD }}

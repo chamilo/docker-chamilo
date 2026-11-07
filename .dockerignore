@@ -1,2 +1,12 @@
-# Ignore items for docker build
+# Build-context hygiene for the docker-chamilo image.
+# This repo is docker-only: the LMS source is fetched at build time (curl),
+# not copied from context, so the context only needs Dockerfile + nginx.conf
+# + entrypoint.sh. Exclude everything else to keep the context lean.
+.git
+.github
+*.log
 tmp/
+# Docs live in the repo for humans; the build never needs them in-context
+# (the only files the build uses are Dockerfile + nginx.conf + entrypoint.sh).
+# Blanket pattern so any future .md is auto-excluded, no per-file list to keep.
+*.md

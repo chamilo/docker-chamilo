@@ -1,0 +1,67 @@
+# Chamilo LMS — compose.
+#
+#   chamilo : the app (PHP 8.3-FPM + nginx, this repo's image) — HTTP on :80
+#   db      : MariaDB (LMS database)
+#   redis   : session/cache (optional; reachable on the compose network)
+#
+# The app reads DATABASE_* (see .env.dist), NOT DB_*. Passwords and APP_SECRET
+# come from `.env` (gitignored — template in .env.example), so no secrets are
+# committed in this file.
+services:
+  chamilo:
+    build: .
+    ports:
+      - "80:80"
+    environment:
+      - DATABASE_HOST=db
+      - DATABASE_PORT=3306
+      - DATABASE_NAME=chamilo
+      - DATABASE_USER=chamilo
+      - DATABASE_PASSWORD=${DATABASE_PASSWORD:?required in .env}
+      - APP_ENV=prod
+      - APP_SECRET=${APP_SECRET:?required in .env}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - chamilo_data:/app/chamilo-lms/var
+    restart: unless-stopped
+
+  db:
+    image: docker.io/library/mariadb:11
+    environment:
+      - MARIADB_ROOT_PASSWORD=${MARIADB_ROOT_PASSWORD:?required in .env}
+      - MARIADB_DATABASE=chamilo
+      - MARIADB_USER=chamilo
+      - MARIADB_PASSWORD=${MARIADB_PASSWORD:?required in .env}
+    volumes:
+      - db_data:/var/lib/mysql
+    # "ready to accept connections" — used by chamilo's depends_on
+    # (condition: service_healthy). mariadb:11 ships the client as
+    # `mariadb-admin` (not `mysqladmin`); -u root authenticates with
+    # MARIADB_ROOT_PASSWORD (supplied via .env).
+    healthcheck:
+      test: ["CMD", "mariadb-admin", "ping", "-h", "localhost", "-u", "root", "-p${MARIADB_ROOT_PASSWORD:?required in .env}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+  redis:
+    image: docker.io/library/redis:7
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  chamilo_data:
+  db_data:
+  redis_data:

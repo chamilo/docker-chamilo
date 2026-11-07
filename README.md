@@ -1,86 +1,84 @@
 # docker-chamilo
 
-[![](https://images.microbadger.com/badges/image/chamilo/docker-chamilo.svg)](https://microbadger.com/images/chamilo/docker-chamilo "Get your own image badge on microbadger.com")
+Single-container Docker image for the [Chamilo LMS](https://www.chamilo.org).
 
-Official Docker image for Chamilo LMS
+This image bundles **PHP 8.3-FPM** and **nginx** in one container and serves the
+LMS over HTTP on port **80** (nginx → PHP-FPM on `127.0.0.1:9000`).
 
-This image is not ready yet. Please come back soon or watch the project for updates.
+## How it works
 
-## Launching
+The repo is **docker-only**: the LMS source is *not* vendored here. At build
+time the `Dockerfile` downloads the LMS at a **pinned ref** of
+[`chamilo/chamilo-lms`](https://github.com/chamilo/chamilo-lms) (a tag or a
+full commit SHA, set by the `CHAMILO_LMS_REF` build arg) and installs its
+Composer dependencies. The image is therefore fully reproducible, and this
+repo stays small.
 
-This image is currently based on Chamilo LMS 1.10 and requires a separate database container to run.
-We suggest using the "mariadb" container, like so:
+The container runs two processes:
 
-```
-docker run --name mariadb -e MYSQL_ROOT_PASSWORD=pass -e MYSQL_USER=chamilo -e MYSQL_PASSWORD=chamilo -e MYSQL_DATABASE=chamilo -d mariadb
-```
+| Process | Listens on      | Role |
+|---------|----------------|------|
+| PHP-FPM | `127.0.0.1:9000` | runs the Symfony front controller |
+| nginx   | `0.0.0.0:80`     | serves static files + proxies `.php` to FPM |
 
-This will get you back on the command line of the Docker host. You can see the container running with ```docker ps```.
+## Quick start
 
-Then start the chamilo/docker-chamilo container:
+```bash
+# 1. Provide a local .env (gitignored; template in .env.example)
+cp .env.example .env
 
-```
-docker run --link=mariadb:db --name chamilo -p 8080:80 -it chamilo/docker-chamilo
-```
+# 2. Build the image and start the full stack (app + MariaDB + Redis)
+docker compose up -d --build
 
-At this point, the docker-chamilo image doesn't provide an installed version of Chamilo LMS, but this should be ready soon.
-
-The configuration files assume the host will be "docker.chamilo.net", so you will have to define it in your host's /etc/hosts file, depending on the IP of the container.
-
-```
-72.17.0.10 docker.chamilo.net
-```
-
-Now start your browser and load http://docker.chamilo.net.
-
-## Using with a load-balancer
-
-If you want to use a more complex system with load balancing, you might want to try out the following suite of commands:
-
-```
-docker run --name varwww -d ywarnier/varw
+# Open the LMS
+#   http://localhost/  →  first-run installer (create the DB, then install)
 ```
 
-This will provide a shared /var/www2 partition
+See [SETUP.md](SETUP.md) for first-run and production notes.
 
-```
-docker run --name mariadb -e MYSQL_ROOT_PASSWORD=pass -e MYSQL_USER=chamilo -e MYSQL_PASSWORD=chamilo -e MYSQL_DATABASE=chamilo -d mariadb
-docker run --link=mariadb:db --volumes-from=varwww --name chamilo -p 8080:80 -it chamilo/docker-chamilo
-# Change all configuration to point to /var/www2/chamilo/www and change the Chamilo config file (root_web)
-# Also, inside app/config/configuration.php, change "session_stored_in_db" to true
-# configure Chamilo on this first container then take a snapshot
-docker commit -m "Live running Chamilo connected to host 'db' with existing database" {container-hash} docker-chamilo:live
-docker run --link=mariadb:db --volumes-from=varwww --name chamilo2 -p 8081:80 -it docker-chamilo:live
-docker run --name lb --link=chamilo:w1 --link=chamilo4:w2 -e CHAMILO_1_PORT_80_TCP_ADDR=172.17.0.10 -e CHAMILO_2_PORT_80_TCP_ADDR=172.17.0.11 -e CHAMILO_HOSTNAME=docker.chamilo.net -e CHAMILO_PATH=/ -p 8082:80 -it jasonwyatt/nginx-loadbalancer
-```
+## Configuration
 
-Sadly, there's something wrong at the moment in the nginx-loadbalancer image, and you have to connect to it to change the configuration of the reverse proxy (the last container you launched).
+Environment variables (read by the Symfony app — see `.env.dist` of the LMS):
 
-```
-docker ps
-```
+| Variable           | Default | Notes |
+|--------------------|---------|-------|
+| `DATABASE_HOST`    | `db`    | FQDN of the database service |
+| `DATABASE_PORT`    | `3306`  | |
+| `DATABASE_NAME`    | `chamilo` | |
+| `DATABASE_USER`    | `chamilo` | |
+| `DATABASE_PASSWORD`| from `.env` | required in `.env` |
+| `APP_ENV`          | `prod`  | `dev` for verbose error pages |
+| `APP_SECRET`       | from `.env` | required in `.env`, 32+ chars |
 
-(to identify the hash of the image of the load balancer (lb))
+> **Note:** the app reads `DATABASE_*`, not `DB_*`. Earlier compose examples
+> used `DB_*`, which the LMS ignores.
+>
+> **Secrets:** the 4 sensitive values (`DATABASE_PASSWORD`, `MARIADB_ROOT_PASSWORD`,
+> `MARIADB_PASSWORD`, `APP_SECRET`) come from a gitignored `.env`
+> (template in `.env.example`). The compose uses `${VAR:?required in .env}`,
+> so a missing value fails at parse time instead of silently using a weak
+> default.
 
-```
-docker exec -i -t {lb-container-hash} bash
-cd /etc/nginx/sites-available/
-vi proxy.conf
-```
+## Releasing a new LMS version
 
-(add the following *just before* proxy_pass, in the two occurrences)
+The version is pinned in one place — the `CHAMILO_LMS_REF` build arg in the
+`Dockerfile`. To ship a new LMS version, change it to a release tag
+(e.g. `v3.0.0`) or a full commit SHA, and rebuild:
 
-```
-  proxy_set_header Host $host;
-  proxy_set_header X-Real-IP $remote_addr;
-```
-
-Now reload Nginx
-
-```
-service nginx reload
+```bash
+docker build --build-arg CHAMILO_LMS_REF=<tag-or-sha> -t chamilo-lms .
 ```
 
-Now you should be good to go.
+## Requirements
 
-Note that this will only work as long as you don't upload any file or object that needs to be stored on disk, as the two web servers will not share any disk space in the context presented above.
+- A MariaDB/MySQL database (provided by `docker-compose.yml` as the `db` service)
+- Port 80 (HTTP)
+- Optional: Redis for sessions/caching (provided as the `redis` service)
+
+## Image size
+
+~1.2 GB after the source fetch (LMS source + prod-only vendor + PHP 8.3 +
+nginx). Dev-only Composer packages are stripped at build time (see the
+Dockerfile's two-step `composer install`), and the nested `.git` of the LMS
+source is excluded at build time — the old 1.2 GiB `.git` from the previous
+approach is gone.

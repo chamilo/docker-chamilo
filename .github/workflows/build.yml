@@ -1,0 +1,51 @@
+# CI: the image must build.
+#
+# This is a docker-only repo — the only build that matters is the image, built
+# with the pinned CHAMILO_LMS_REF (the Dockerfile's default ARG). This job
+# runs that exact build on push and on manual dispatch, catching the two
+# breakages this image is prone to instead of finding them at release time:
+#   * the `assets:install` memory OOM (AGENTS.md gotcha #1), and
+#   * a broken source fetch (pinned ref no longer present upstream).
+#
+# Cost: GitHub-hosted runners are free and unmetered for public repositories,
+# so this is not metered against the free plan (the 2,000-min/500 MB quota
+# applies only to private repos). The only real cost is build time per push;
+# the LMS fetch + Composer step is the slow part and is not cached between
+# runs, so each green build takes a few minutes.
+name: build
+
+on:
+  push:
+  workflow_dispatch:
+
+# Cancel in-progress runs when a new commit lands on the same branch.
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  docker-build:
+    name: Build image
+    runs-on: ubuntu-latest
+    # A full build from scratch (LMS tarball + Composer) can exceed the
+    # default 1h job timeout on a cold cache; give it headroom.
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      # Buildx builder for docker/build-push-action. Pinned to the latest
+      # published minor (a bare major would float across minors on its own).
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4.4.1
+
+      # Build (and load locally) with the repo's own pinned ref — no
+      # build-arg override, so CI exercises exactly what a real build ships.
+      # load: true materialises the final image (no registry push); the build
+      # itself is the assertion — a fetch or OOM failure fails the step.
+      - name: Build image
+        uses: docker/build-push-action@v7.4.0
+        with:
+          context: .
+          load: true
+          tags: chamilo-lms-ci:ci
