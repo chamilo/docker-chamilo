@@ -37,9 +37,19 @@
 # HOW IT TALKS TO GITHUB: the `gh` CLI — preinstalled on the GitHub-hosted
 # ubuntu-latest runner and authenticated by GITHUB_TOKEN itself (no installer
 # action, no `gh auth login`). Each GitHub operation is a readable one-liner:
-# `gh api` for the release/compare lookups, `gh pr` to dedup/open the PR,
-# `gh issue` to dedup/file the report. Git is the repo's own (the one-line
-# Dockerfile edit + push). No hand-rolled curl/jq, no embedded JS.
+# `gh api` for the release/compare lookups, `gh pr` to dedup/open the PR, and
+# the `JasonEtco/create-an-issue` action to file the weekly drift-report Issue
+# (and the build-FAILED Issue) from a committed template in
+# `.github/ISSUE_TEMPLATE/`. Git is the repo's own (the one-line Dockerfile
+# edit + push). No hand-rolled curl/jq, no embedded JS, no `gh issue`.
+#
+# The Issue path uses a GitHub Action, not `gh`, because `gh issue create`
+# inside a workflow is the documented anti-pattern for exactly this: a
+# template file (`.github/ISSUE_TEMPLATE/dep-drift-report.md`) plus the
+# create-an-issue action gives a version-controlled, diffable Issue body,
+# and the action dedups by exact title on open Issues (update_existing: false
+# = "skip if one is already open"), which is the same no-duplicate behaviour
+# the old `gh issue list | grep -Fxq` check provided.
 #
 # Cost: GitHub-hosted runners are free/unmetered for public repos, so this
 # is not metered against the 2,000-min/500 MB quota (private only). The real
@@ -124,20 +134,19 @@ jobs:
             CHAMILO_LMS_REF=${{ env.LATEST }}
           tags: dep-drift-gate:${{ env.LATEST }}
 
-      # Build failed: NO PR. File a drift Issue recording the failure (dedup by ref).
+      # Build failed: NO PR. File a build-FAILED drift Issue from the template.
+      # The create-an-issue action dedups by exact title on open Issues
+      # (update_existing: false -> skip if one is already open), so a re-run
+      # for the same ref is a no-op — same as the old `gh issue list | grep`.
       - name: File drift Issue (build FAILED — no PR opened)
         if: env.DRIFT == 'true' && steps.gate.result == 'failure'
+        uses: JasonEtco/create-an-issue@v2.9.2
+        with:
+          filename: .github/ISSUE_TEMPLATE/dep-drift-failed.md
+          update_existing: false
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # {{ env.LATEST }} in the template resolves to this (GITHUB_ENV).
           LATEST: ${{ env.LATEST }}
-        run: |
-          set -euo pipefail
-          TITLE="chamilo-lms drift (build FAILED) ${LATEST}"
-          if gh issue list --state open --json title --jq '.[].title' | grep -Fxq "$TITLE"; then
-            echo "A failure Issue for ${LATEST} already exists; not duplicating."
-            exit 0
-          fi
-          gh issue create --title "$TITLE" --body "Build-gate FAILED building the image at CHAMILO_LMS_REF=${LATEST}; no bump PR was opened (fail-closed). The current pin is unchanged. See the dep-drift run log for the build failure."
 
       # Build succeeded: open the one-line bump PR (dedup by branch), then file
       # the weekly drift report Issue (dedup by from->to pair).
@@ -174,12 +183,23 @@ jobs:
             echo "An open PR for ${BRANCH} already exists; not opening a duplicate."
           fi
 
-          # --- The weekly drift report Issue (dedup by the from->to pair).
-          TITLE_ISSUE="chamilo-lms drift ${CUR} -> ${LATEST}"
-          if gh issue list --state open --json title --jq '.[].title' | grep -Fxq "$TITLE_ISSUE"; then
-            echo "A drift Issue for this pair already exists; not duplicating."
-          else
-            # How many commits the latest tag is ahead of the pin (best-effort).
-            AHEAD="$(gh api "repos/${LMS_REPO}/compare/${CUR}...${LATEST}" --jq .ahead_by 2>/dev/null || echo '?')"
-            gh issue create --title "$TITLE_ISSUE" --body "Weekly dep-drift report. Current pin ${CUR}, latest stable ${LATEST} (${AHEAD} commits ahead). Build-gate PASSED at ${LATEST}; a bump PR was opened (or is already open). The change is the linked PR (one-line Dockerfile diff). Not auto-merged."
-          fi
+          # How many commits the latest tag is ahead of the pin (best-effort),
+          # reported in the drift-report Issue template ({{ env.AHEAD }}).
+          AHEAD="$(gh api "repos/${LMS_REPO}/compare/${CUR}...${LATEST}" --jq .ahead_by 2>/dev/null || echo '?')"
+          echo "AHEAD=${AHEAD}" >> "$GITHUB_ENV"
+
+      # Build succeeded: file the weekly drift report Issue (dedup by the
+      # from->to pair). The create-an-issue action dedups by exact title on
+      # open Issues (update_existing: false -> skip), so a re-run for the
+      # same pair is a no-op — same as the old `gh issue list | grep`.
+      - name: File drift report Issue
+        if: env.DRIFT == 'true' && steps.gate.result == 'success'
+        uses: JasonEtco/create-an-issue@v2.9.2
+        with:
+          filename: .github/ISSUE_TEMPLATE/dep-drift-report.md
+          update_existing: false
+        env:
+          # {{ env.CUR/LATEST/AHEAD }} in the template resolve to these.
+          CUR: ${{ env.CUR }}
+          LATEST: ${{ env.LATEST }}
+          AHEAD: ${{ env.AHEAD }}
